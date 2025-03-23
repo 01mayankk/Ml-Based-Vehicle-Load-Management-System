@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vehicle Load Prediction</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='script.js') }}" defer></script>
+    <style>
+        body {
+            background-image: url('{{ background_image }}');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+        }
+        .container {
+            width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 10px;
+            color: white;
+        }
+        .container h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .container label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .container input[type="number"],
+        .container select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            background-color: #333;
+            color: white;
+        }
+        .container button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .container button:hover {
+            background-color: #0056b3;
+        }
+        .result-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 5px;
+        }
+        .result-container span.overloaded {
+            color: red;
+        }
+        .result-container span.not-overloaded {
+            color: green;
+        }
+        .graphs {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .graphs img {
+            max-width: 90%;
+            height: auto;
+            margin-bottom: 10px;
+            cursor: pointer;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+        }
+        .modal-content {
+            display: block;
+            margin: 10% auto;
+            max-width: 90%;
+            max-height: 80%;
+        }
+        .close-btn {
+            color: white;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 30px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Vehicle Load Prediction</h1>
+        <form id="predictionForm">
+            <label for="vehicle_type">Vehicle Type:</label>
+            <select id="vehicle_type" name="vehicle_type">
+                <option value="2-wheeler">2-wheeler</option>
+                <option value="4-wheeler 5-seater">4-wheeler 5-seater</option>
+                <option value="4-wheeler 7-seater">4-wheeler 7-seater</option>
+                <option value="delivery vehicle">delivery vehicle</option>
+                <option value="heavy vehicle">heavy vehicle</option>
+            </select><br><br>
+            <label for="weight">Weight:</label>
+            <input type="number" id="weight" name="weight" required>
+            <p id="weight_error" style="color: red;"></p><br>
+            <label for="max_load_capacity">Max Load Capacity:</label>
+            <input type="number" id="max_load_capacity" name="max_load_capacity" required>
+            <p id="max_load_error" style="color: red;"></p><br>
+            <label for="passenger_count">Passenger Count:</label>
+            <input type="number" id="passenger_count" name="passenger_count" required>
+            <p id="passenger_error" style="color: red;"></p><br>
+            <label for="cargo_weight">Cargo Weight:</label>
+            <input type="number" id="cargo_weight" name="cargo_weight" required>
+            <p id="cargo_error" style="color: red;"></p><br>
+            <button type="button" onclick="predict()">Predict</button>
+        </form>
+        <div id="result" class="result-container">
+            <div id="dataVisualizationSection" class="graphs" style="display: none;">
+                <h2>Data Visualizations</h2>
+                <img id="histogram" src="" alt="Histogram (Weight)" onclick="openModal('histogram')" data-src="{{ url_for('static', filename='graphs/histogram_weight.png') }}">
+                <img id="boxplot" src="" alt="Boxplot (Weight)" onclick="openModal('boxplot')" data-src="{{ url_for('static', filename='graphs/boxplot_weight.png') }}">
+                <img id="scatter" src="" alt="Scatter Plot (Weight vs Cargo)" onclick="openModal('scatter')" data-src="{{ url_for('static', filename='graphs/scatter_plot.png') }}">
+                <img id="heatmap" src="" alt="Heatmap (Correlation)" onclick="openModal('heatmap')" data-src="{{ url_for('static', filename='graphs/heatmap.png') }}">
+                <img id="pairplot" src="" alt="Pair Plot (Features)" onclick="openModal('pairplot')" data-src="{{ url_for('static', filename='graphs/pair_plot.png') }}">
+                <img id="countplot" src="" alt="Count Plot (Vehicle Types)" onclick="openModal('countplot')" data-src="{{ url_for('static', filename='graphs/count_plot.png') }}">
+            </div>
+        </div>
+    </div>
+
+    <div id="graphModal" class="modal">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <img class="modal-content" id="graphImage">
+    </div>
+
+    <script>
+        function predict() {
+            const formData = {
+                vehicle_type: document.getElementById("vehicle_type").value,
+                weight: parseInt(document.getElementById("weight").value),
+                max_load_capacity: parseInt(document.getElementById("max_load_capacity").value),
+                passenger_count: parseInt(document.getElementById("passenger_count").value),
+                cargo_weight: parseInt(document.getElementById("cargo_weight").value)
+            };
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById("result").innerHTML = `
+                    Overload Status: <span class="${data.overload_status.toLowerCase().replace(' ', '-')}">${data.overload_status}</span><br>
+                    Overload Amount: ${data.overload_amount} kg
+                `;
+
+                document.getElementById("dataVisualizationSection").style.display = "block";
+            });
+        }
+
+        function openModal(graphId) {
+            const modal = document.getElementById("graphModal");
+            const modalImg = document.getElementById("graphImage");
+            modalImg.src = document.getElementById(graphId).src;
+            modal.style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById("graphModal").style.display = "none";
+        }
+    </script>
+</body>
+</html>
